@@ -14,6 +14,19 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
+def pick_redirect_uri(conf):
+    """secrets の redirect_uri(単数の文字列)または redirect_uris(文字列/配列)の
+    どちらでも受け付け、単一のリダイレクトURI文字列を返す。無ければ None。"""
+    redirect = conf.get("redirect_uri")
+    if not redirect:
+        ru = conf.get("redirect_uris")
+        if isinstance(ru, (list, tuple)):
+            redirect = ru[0] if ru else None
+        else:
+            redirect = ru
+    return redirect or None
+
+
 def _client_config(oauth_conf):
     return {
         "web": {
