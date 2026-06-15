@@ -7,8 +7,10 @@ try:
     import gdrive
 
     _GDRIVE_IMPORT_OK = True
-except Exception:
+    _GDRIVE_IMPORT_ERR = None
+except Exception as e:
     _GDRIVE_IMPORT_OK = False
+    _GDRIVE_IMPORT_ERR = repr(e)
 
 st.set_page_config(page_title="ファイルクレンジング", page_icon="🧹", layout="wide")
 
@@ -53,6 +55,18 @@ if conf is not None:
 
 with st.sidebar:
     st.header("Google ドライブ連携")
+    # --- 一時的な診断パネル(原因特定後に削除する。値は表示しない) ---
+    with st.expander("🔧 診断(一時)", expanded=True):
+        st.write("gdrive import OK:", _GDRIVE_IMPORT_OK)
+        if _GDRIVE_IMPORT_ERR:
+            st.write("import error:", _GDRIVE_IMPORT_ERR)
+        try:
+            _has = "google_oauth" in st.secrets
+            st.write("'google_oauth' セクション:", _has)
+            if _has:
+                st.write("キー名:", list(st.secrets["google_oauth"].keys()))
+        except Exception as e:
+            st.write("secrets 読み取りエラー:", repr(e))
     if conf is None:
         st.caption("Google ドライブ連携は未設定です(ローカルダウンロードのみ利用できます)。")
     elif "gdrive_creds" in st.session_state:
