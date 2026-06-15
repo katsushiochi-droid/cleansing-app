@@ -41,7 +41,17 @@ def _client_config(oauth_conf):
 
 
 def build_flow(oauth_conf, state=None):
-    flow = Flow.from_client_config(_client_config(oauth_conf), scopes=SCOPES, state=state)
+    # PKCE(code_verifier/code_challenge)は無効化する。
+    # 認可URL生成時の Flow と token 交換時の Flow は別インスタンスで、間でページが
+    # 全リロードされ session_state が消えるため、code_verifier を引き継げない。
+    # 本アプリは client_secret を持つ機密(web)クライアントのため、client_secret により
+    # token 交換が保証され、PKCE がなくても標準の Web アプリ OAuth フローとして成立する。
+    flow = Flow.from_client_config(
+        _client_config(oauth_conf),
+        scopes=SCOPES,
+        state=state,
+        autogenerate_code_verifier=False,
+    )
     flow.redirect_uri = oauth_conf["redirect_uri"]
     return flow
 
