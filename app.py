@@ -3,7 +3,70 @@ import streamlit as st
 
 import cleansing
 
+try:
+    import gdrive
+
+    _GDRIVE_IMPORT_OK = True
+except Exception:
+    _GDRIVE_IMPORT_OK = False
+
 st.set_page_config(page_title="ファイルクレンジング", page_icon="🧹", layout="wide")
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _oauth_conf():
+    if not _GDRIVE_IMPORT_OK:
+        return None
+    try:
+        conf = st.secrets["google_oauth"]
+    except Exception:
+        return None
+    needed = ("client_id", "client_secret", "redirect_uri")
+    if not all(k in conf for k in needed):
+        return None
+    return {k: conf[k] for k in needed}
+
+
+# 注: OAuth の往復でページが全リロードされ、Streamlit の session_state はリセットされる。
+# そのため state(CSRF対策トークン)を session_state で保持・照合できない。社内・信頼できる
+# 範囲での利用を前提とし、機微な本番データのアップロードは避けること(README 参照)。
+def _handle_oauth_callback(conf):
+    params = st.query_params
+    if "code" in params and "gdrive_creds" not in st.session_state:
+        code = params["code"]
+        try:
+            flow = gdrive.build_flow(conf)
+            creds = gdrive.exchange_code(flow, code)
+            st.session_state["gdrive_creds"] = gdrive.creds_to_dict(creds)
+        except Exception as e:
+            st.session_state["gdrive_error"] = (
+                f"Google 連携に失敗しました。もう一度「Google で接続」を押してください: {e}"
+            )
+        st.query_params.clear()
+        st.rerun()
+
+
+conf = _oauth_conf()
+if conf is not None:
+    _handle_oauth_callback(conf)
+
+with st.sidebar:
+    st.header("Google ドライブ連携")
+    if conf is None:
+        st.caption("Google ドライブ連携は未設定です(ローカルダウンロードのみ利用できます)。")
+    elif "gdrive_creds" in st.session_state:
+        st.success("✅ Google ドライブ接続済み")
+        if st.button("切断"):
+            st.session_state.pop("gdrive_creds", None)
+            st.rerun()
+    else:
+        if st.session_state.get("gdrive_error"):
+            st.error(st.session_state.pop("gdrive_error"))
+        flow = gdrive.build_flow(conf)
+        auth_url, _ = gdrive.get_authorization_url(flow)
+        st.link_button("🔗 Google で接続", auth_url)
+        st.caption("接続するとページが再読み込みされます。接続後にファイルをアップロードしてください。")
 
 st.title("🧹 ファイルクレンジング")
 st.caption(
@@ -57,12 +120,32 @@ if uploaded is not None:
 
     excel_buf = cleansing.build_excel(result)
     base = uploaded.name.rsplit(".", 1)[0]
+    filename = f"{base}_cleaned.xlsx"
+
+    st.subheader("保存")
     st.download_button(
-        "📥 クレンジング済 Excel をダウンロード",
+        "📥 この端末にダウンロード",
         data=excel_buf,
-        file_name=f"{base}_cleaned.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        file_name=filename,
+        mime=XLSX_MIME,
     )
+
+    if conf is not None and "gdrive_creds" in st.session_state:
+        if st.button("☁️ Google ドライブに保存"):
+            try:
+                creds = gdrive.dict_to_creds(st.session_state["gdrive_creds"])
+                service = gdrive.build_drive_service(creds)
+                excel_buf.seek(0)
+                info = gdrive.upload_excel(service, excel_buf, filename)
+                st.session_state["gdrive_creds"] = gdrive.creds_to_dict(creds)
+                if info.get("link"):
+                    st.success(f"Google ドライブに保存しました: [{filename}]({info['link']})")
+                else:
+                    st.success(f"Google ドライブに保存しました: {filename}")
+            except Exception as e:
+                st.error(f"Google ドライブへの保存に失敗しました: {e}")
+    elif conf is not None:
+        st.caption("左の「Google で接続」で連携すると、ここから Google ドライブにも保存できます。")
 
 st.divider()
 st.caption(
