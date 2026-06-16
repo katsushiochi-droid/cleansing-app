@@ -2,6 +2,7 @@
 import streamlit as st
 
 import cleansing
+import ui
 
 try:
     import gdrive
@@ -11,6 +12,7 @@ except Exception:
     _GDRIVE_IMPORT_OK = False
 
 st.set_page_config(page_title="ファイルクレンジング", page_icon="🧹", layout="wide")
+ui.inject_css()
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -75,10 +77,10 @@ with st.sidebar:
         st.link_button("🔗 Google で接続", auth_url)
         st.caption("接続するとページが再読み込みされます。接続後にファイルをアップロードしてください。")
 
-st.title("🧹 ファイルクレンジング")
-st.caption(
+ui.render_header(
+    "ファイルクレンジング",
     "顧客データの CSV / Excel をアップロードすると、表記ゆれを正規化し、"
-    "品質チェック結果を付けて整形済み Excel をダウンロードできます。"
+    "品質チェック結果を付けて整形済み Excel をダウンロードできます。",
 )
 
 uploaded = st.file_uploader(
